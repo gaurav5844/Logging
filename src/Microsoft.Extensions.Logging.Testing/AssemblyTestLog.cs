@@ -119,11 +119,6 @@ namespace Microsoft.Extensions.Logging.Testing
                             break;
                         }
                     }
-
-                    if (File.Exists(testOutputFile))
-                    {
-                        throw new InvalidOperationException($"Exhausted enumerated log file names with the format {testOutputFile}. Please reduce log file name collisions.");
-                    }
                 }
 
                 serilogLoggerProvider = ConfigureFileLogging(testOutputFile);
@@ -199,6 +194,11 @@ namespace Microsoft.Extensions.Logging.Testing
             if (!Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
+            }
+
+            if (File.Exists(fileName))
+            {
+                File.Delete(fileName);
             }
 
             var serilogger = new LoggerConfiguration()
