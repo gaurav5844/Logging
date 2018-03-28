@@ -19,6 +19,7 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
 
         public AssemblyTestLogTests(ITestOutputHelper output) : base(output)
         {
+            _output = output;
         }
 
         [Fact]
@@ -66,7 +67,7 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
                     {
                         logger.LogInformation("Created test log in {baseDirectory}", tempDir);
 
-                        using (testAssemblyLog.StartTestLog(output: null, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
+                        using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
                         {
                             var testLogger = testLoggerFactory.CreateLogger("TestLogger");
                             testLogger.LogInformation("Information!");
@@ -113,8 +114,93 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
             }
         }
 
+        [Fact]
+        public async Task TestLogTruncatesTestNameToAvoidLongPaths()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), $"TestLogging_{Guid.NewGuid().ToString("N")}");
+            try
+            {
+                var longTestName = new string('0', 50) + new string('1', 50) + new string('2', 50) + new string('3', 50) + new string('4', 50);
+                using (var testAssemblyLog = AssemblyTestLog.Create("FakeTestAssembly", tempDir))
+                using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: longTestName))
+                {
+                    testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                }
+
+                var testLogFiles = new DirectoryInfo(Path.Combine(tempDir, "FakeTestAssembly", RuntimeInformation.FrameworkDescription.TrimStart('.'), "FakeTestClass")).EnumerateFiles();
+                var testLog = Assert.Single(testLogFiles);
+                var testFileName = Path.GetFileNameWithoutExtension(testLog.Name);
+
+                // The first half of the file comes from the beginning of the test name passed to the logger
+                Assert.Equal(longTestName.Substring(0, testFileName.Length / 2), testFileName.Substring(0, testFileName.Length / 2));
+                // The last half of the file comes from the ending of the test name passed to the logger
+                Assert.Equal(longTestName.Substring(longTestName.Length - testFileName.Length / 2, testFileName.Length / 2), testFileName.Substring(testFileName.Length - testFileName.Length / 2, testFileName.Length / 2));
+
+                var testLogContent = MakeConsistent(File.ReadAllText(testLog.FullName));
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    try
+                    {
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                    catch
+                    {
+                        await Task.Delay(100);
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public async Task TestLogEnumerateFilenamesToAvoidCollisions()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), $"TestLogging_{Guid.NewGuid().ToString("N")}");
+            try
+            {
+                for (var i = 0; i < 10; i++)
+                {
+                    using (var testAssemblyLog = AssemblyTestLog.Create("FakeTestAssembly", tempDir))
+                    using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
+                    {
+                        testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                    }
+                }
+
+                // The first log file exists
+                Assert.True(File.Exists(Path.Combine(tempDir, "FakeTestAssembly", RuntimeInformation.FrameworkDescription.TrimStart('.'), "FakeTestClass", $"FakeTestName.log")));
+
+                // Subsequent files exist
+                for (var i = 0; i < 9; i++)
+                {
+                    Assert.True(File.Exists(Path.Combine(tempDir, "FakeTestAssembly", RuntimeInformation.FrameworkDescription.TrimStart('.'), "FakeTestClass", $"FakeTestName.{i}.log")));
+                }
+
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    try
+                    {
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                    catch
+                    {
+                        await Task.Delay(100);
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                }
+            }
+        }
+
         private static readonly Regex TimestampRegex = new Regex(@"\d+-\d+-\d+T\d+:\d+:\d+");
         private static readonly Regex DurationRegex = new Regex(@"[^ ]+s$");
+        private readonly ITestOutputHelper _output;
+
         private static string MakeConsistent(string input)
         {
             return string.Join(Environment.NewLine, input.Split(new[] { Environment.NewLine }, StringSplitOptions.None)
