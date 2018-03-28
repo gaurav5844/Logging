@@ -90,7 +90,7 @@ namespace Microsoft.Extensions.Logging.Testing
 
                 if (testOutputDirectory.Length + testName.Length + LogFileExtension.Length >= MaxPathLength)
                 {
-                    output.WriteLine($"Warning: test name {testName} is too long. Please shorten test name.");
+                    _globalLogger.LogWarning($"Test name {testName} is too long. Please shorten test name.");
 
                     // Shorten the test name by removing the middle portion of the testname
                     var testNameLength = MaxPathLength - testOutputDirectory.Length - LogFileExtension.Length;
@@ -107,7 +107,7 @@ namespace Microsoft.Extensions.Logging.Testing
 
                 if (File.Exists(testOutputFile))
                 {
-                    output.WriteLine($"Warning: Output log file {testOutputFile} already exists. Please try to keep log file names unique.");
+                    _globalLogger.LogWarning($"Output log file {testOutputFile} already exists. Please try to keep log file names unique.");
 
                     for (var i = 0; i < 1000; i++)
                     {
@@ -115,7 +115,7 @@ namespace Microsoft.Extensions.Logging.Testing
 
                         if (!File.Exists(testOutputFile))
                         {
-                            output.WriteLine($"Warning: To resolve log file collision, the enumerated file {testOutputFile} will be used.");
+                            _globalLogger.LogWarning($"To resolve log file collision, the enumerated file {testOutputFile} will be used.");
                             break;
                         }
                     }

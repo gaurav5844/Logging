@@ -20,7 +20,6 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
 
         public AssemblyTestLogTests(ITestOutputHelper output) : base(output)
         {
-            _output = output;
         }
 
         [Fact]
@@ -64,7 +63,7 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
             {
                 logger.LogInformation("Created test log in {baseDirectory}", tempDir);
 
-                using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
+                using (testAssemblyLog.StartTestLog(output: null, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
                 {
                     var testLogger = testLoggerFactory.CreateLogger("TestLogger");
                     testLogger.LogInformation("Information!");
@@ -99,11 +98,17 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
             RunTestLogFunctionalTest((tempDir, loggerFactory) =>
         {
             var longTestName = new string('0', 50) + new string('1', 50) + new string('2', 50) + new string('3', 50) + new string('4', 50);
+            var logger = loggerFactory.CreateLogger("Test");
             using (var testAssemblyLog = AssemblyTestLog.Create("FakeTestAssembly", tempDir))
-            using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: longTestName))
             {
-                testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                logger.LogInformation("Created test log in {baseDirectory}", tempDir);
+
+                using (testAssemblyLog.StartTestLog(output: null, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: longTestName))
+                {
+                    testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                }
             }
+            logger.LogInformation("Finished test log in {baseDirectory}", tempDir);
 
             var testLogFiles = new DirectoryInfo(Path.Combine(tempDir, "FakeTestAssembly", RuntimeInformation.FrameworkDescription.TrimStart('.'), "FakeTestClass")).EnumerateFiles();
             var testLog = Assert.Single(testLogFiles);
@@ -121,14 +126,20 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
         public  Task TestLogEnumerateFilenamesToAvoidCollisions() =>
             RunTestLogFunctionalTest((tempDir, loggerFactory) =>
         {
-            for (var i = 0; i < 10; i++)
+            var logger = loggerFactory.CreateLogger("Test");
+            using (var testAssemblyLog = AssemblyTestLog.Create("FakeTestAssembly", tempDir))
             {
-                using (var testAssemblyLog = AssemblyTestLog.Create("FakeTestAssembly", tempDir))
-                using (testAssemblyLog.StartTestLog(output: _output, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
+                logger.LogInformation("Created test log in {baseDirectory}", tempDir);
+
+                for (var i = 0; i < 10; i++)
                 {
-                    testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                    using (testAssemblyLog.StartTestLog(output: null, className: "FakeTestAssembly.FakeTestClass", loggerFactory: out var testLoggerFactory, minLogLevel: LogLevel.Trace, testName: "FakeTestName"))
+                    {
+                        testLoggerFactory.CreateLogger("TestLogger").LogInformation("Information!");
+                    }
                 }
             }
+            logger.LogInformation("Finished test log in {baseDirectory}", tempDir);
 
             // The first log file exists
             Assert.True(File.Exists(Path.Combine(tempDir, "FakeTestAssembly", RuntimeInformation.FrameworkDescription.TrimStart('.'), "FakeTestClass", $"FakeTestName.log")));
@@ -142,7 +153,6 @@ namespace Microsoft.Extensions.Logging.Testing.Tests
 
         private static readonly Regex TimestampRegex = new Regex(@"\d+-\d+-\d+T\d+:\d+:\d+");
         private static readonly Regex DurationRegex = new Regex(@"[^ ]+s$");
-        private readonly ITestOutputHelper _output;
 
         private async Task RunTestLogFunctionalTest(Action<string, ILoggerFactory> action, [CallerMemberName] string testName = null)
         {
