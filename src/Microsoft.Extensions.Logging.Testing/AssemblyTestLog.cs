@@ -19,7 +19,7 @@ namespace Microsoft.Extensions.Logging.Testing
     {
         public static readonly string OutputDirectoryEnvironmentVariableName = "ASPNETCORE_TEST_LOG_DIR";
         private static readonly string LogFileExtension = ".log";
-        private static readonly int MaxPathLength = 250;
+        private static readonly int MaxPathLength = 245;
 
         private static readonly object _lock = new object();
         private static readonly Dictionary<Assembly, AssemblyTestLog> _logs = new Dictionary<Assembly, AssemblyTestLog>();
